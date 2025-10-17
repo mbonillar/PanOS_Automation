@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <div class="container theme-showcase" role="main">
+
+        <h3>Welcome to Firewall Query Tools.</h3>
+        <p>Select an Option to Proceed:</p>
+        <ul>
+            <li><a href="{{ url_for('log.index') }}">Query Firewall Logs</a></li>
+            <li><a href="{{ url_for('suggestions.index') }}">Report Problems</a></li>
+            <li><a href="{{ url_for('about.index') }}">About</a></li>
+        </ul>
+
+    </div> <!-- /container -->
+{% endblock %}

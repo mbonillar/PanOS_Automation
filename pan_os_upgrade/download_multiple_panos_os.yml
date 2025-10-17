@@ -1,0 +1,162 @@
+---
+# download_panos_os.yml - Downloads a PAN-OS version to a device.
+#
+# Description
+# ===========
+#
+# Downloads a specific PAN-OS version to a device.  Useful for major version upgrades where a new base PAN-OS version
+# needs to be downloaded to the device (i.e. 8.1.12 -> 9.0.5).
+#
+# This playbook requires connection details for the device to be specified in the variables 'ip_address', 'username',
+# and 'password'.  These may be defined as host variables (see `host_vars/firewall.yml` for an example) or extra vars.
+#
+# Usage
+# =====
+#
+#   target: Target PAN-OS device, as named in the inventory.  See `host_vars/firewall.yml` for sample
+#           definition of host variables.  Default value is 'firewall'.
+#
+#   version: Version to download to device.
+#
+#   sync_to_peer: If the target PAN-OS device is a member of an HA pair, perform actions on the peer device as well.
+#                 Default value is 'false'.
+- name: Prep Report File
+  hosts: localhost
+  connection: local
+
+  vars:
+    csv_path: reports
+    headers: Store_Number,Base_Release,Base_OS_Status,Target_Release,Target_OS_Status,HA_Active_IP,HA_Active_Status,HA_Passive_IP,HA_Passive_Status
+
+  tasks:
+    - name: Generate Report File Name
+      ansible.builtin.set_fact:
+        csv_filename: 'download_report_{{ansible_date_time.date}}.csv'
+      delegate_to: localhost
+      run_once: true
+
+    - name: Delete File If already exists
+      ansible.builtin.file:
+        path: "{{ csv_path }}/{{csv_filename}}"
+        state: absent
+      run_once: true
+
+    - name: Save CSV Headers
+      ansible.builtin.lineinfile:
+        dest: "{{ csv_path }}/{{ csv_filename }}"
+        line: "{{ headers }}"
+        create: true
+        state: present
+      delegate_to: localhost
+      run_once: true
+
+- name: Download PaloAlto OS
+  hosts: all
+  connection: local
+  serial: 10
+
+  vars:
+    primary:
+      ip_address: '{{ primary_ip_address }}'
+      username: '{{ username | default(omit) }}'
+      password: '{{ password | default(omit) }}'
+      api_key: '{{ api_key | default(omit) }}'
+
+    secondary:
+      ip_address: '{{ secondary_ip_address }}'
+      username: '{{ username | default(omit) }}'
+      password: '{{ password | default(omit) }}'
+      api_key: '{{ api_key | default(omit) }}'
+
+    sync_to_peer: true
+
+    headers: Store_Number,Base_Release,Base_OS_Status,Target_Release,Target_OS_Status,HA_Active_IP,HA_Active_Status,HA_Passive_IP,HA_Passive_Status
+    csv_path: reports
+
+  tasks:
+    - name: Generate Report File Name
+      ansible.builtin.set_fact:
+        csv_filename: 'download_report_{{ansible_date_time.date}}.csv'
+      delegate_to: localhost
+      run_once: true
+
+    - ansible.builtin.include_tasks: tasks/panos_roles_in_ha.yml
+
+    - block:
+      - name: "Download PAN-OS {{ base_version }} on Active FW in HA"
+        paloaltonetworks.panos.panos_software:
+          provider: '{{ primary }}'
+          version: '{{ base_version }}'
+          sync_to_peer: '{{ sync_to_peer }}'
+          download: true
+          install: false
+          restart: false
+        register: base_downloaded
+
+      - name: "Download PAN-OS {{ version }} on Active FW in HA"
+        paloaltonetworks.panos.panos_software:
+          provider: '{{ primary }}'
+          version: '{{ version }}'
+          sync_to_peer: '{{ sync_to_peer }}'
+          download: true
+          install: false
+          restart: false
+        register: target_downloaded
+
+      - name: Build Out CSV File When HA OK
+        ansible.builtin.lineinfile:
+          dest: "{{ csv_path }}/{{ csv_filename }}"
+          line: >-
+            {{ inventory_hostname }},{{base_version}},{{ 'COMPLETE' if base_downloaded.changed else 'ALREADY EXISTS' }},
+            {{version}},{{ 'COMPLETE' if target_downloaded.changed else 'ALREADY EXISTS' }},
+            {{ primary_ip_address }},{{ primary_ha }},{{ secondary_ip_address }},{{ secondary_ha }}
+          state: present
+          insertafter: EOF
+        delegate_to: localhost
+
+      when: valid_ha
+
+    - name: Build Out CSV When HA Check Failed
+      ansible.builtin.lineinfile:
+        dest: "{{ csv_path }}/{{ csv_filename }}"
+        line: >-
+          {{ inventory_hostname }},{{base_version}},'NOT-DOWNLOADED',{{version}},'NOT-DOWNLOADED',
+          {{ primary_ip_address }},{{ primary_ha }},{{ secondary_ip_address }},{{ secondary_ha }}
+        state: present
+        insertafter: EOF
+        delegate_to: localhost
+      when: valid_ha is undefined
+
+
+- name: Send Email Report
+  hosts: localhost
+  vars:
+    csv_path: reports
+    headers: Store_Number,Base_Release,Base_OS_Status,Target_Release,Target_OS_Status,HA_Active_IP,HA_Active_Status,HA_Passive_IP,HA_Passive_Status
+
+  tasks:
+    - name: Generate Report File Name
+      ansible.builtin.set_fact:
+        csv_filename: 'download_report_{{ansible_date_time.date}}.csv'
+      delegate_to: localhost
+
+    - name: Read in CSV to Variable
+      community.general.read_csv:
+        path: "{{ csv_path }}/{{ csv_filename }}"
+      register: csv_file
+      delegate_to: localhost
+      run_once: true
+
+    - name: Send Email
+      community.general.mail:
+        host: "{{ email_host }}"
+        from: "{{ email_from }}"
+        port: 25
+        to: "{{ email_to }}"
+        subject: "[Ansible] PAN-OS Download Report - {{ansible_date_time.date}}"
+        body: "{{ lookup('template', 'download_report_template.html.j2') }}"
+        attach: "{{ csv_path }}/{{ csv_filename }}"
+        subtype: html
+        secure: never
+      delegate_to: localhost
+      run_once: true

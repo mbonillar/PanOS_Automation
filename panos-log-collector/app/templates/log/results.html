@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+    <div class="container theme-showcase" role="main">
+      <h2>Log Output - Simple</h2>
+      <h2>Your Results For:</h2>
+      <p>Source IP: {{ source_ip }}</p>
+      {% if dest_ip %}
+        <p>Destination IP: {{ dest_ip }}</p>
+      {% endif %}
+      {% if dest_port %}
+        <p>Destination Port: {{ dest_port }}</p>
+      {% endif %}
+      <hr>
+      <h2>Traffic Info:</h2>
+      {% if 'allow' ==  log_results['actions'] %}
+        <h2><span style="color:green;text-transform:uppercase"> Action: ALLOW</span></h2>
+      {% else %}
+      <h2><span style="color:red;text-transform:uppercase"> Action: {{ log_results['action'] }}</span></h2>
+      {% endif %}
+      <p>{{ log_results['reason'] }}</p>
+      <br>
+
+    </div> <!-- /container -->
+
+{% endblock %}

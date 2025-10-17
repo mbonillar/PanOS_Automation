@@ -1,0 +1,12 @@
+# Set so that Ansible will execute the virtualenv Python instead of the system
+# Python for 'connection: local' module calls.
+#
+# See http://willthames.github.io/2018/07/01/connection-local-vs-delegate_to-localhost.html.
+ansible_python_interpreter: /envs/PaloAlto-Ansible/bin/python
+email_host: ""
+email_from: ""
+email_to: ""
+
+# version: OS version PANs in HA will be upgrading to
+version: 11.1.4
+base_version: 11.1.0

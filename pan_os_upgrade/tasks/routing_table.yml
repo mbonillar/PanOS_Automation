@@ -1,0 +1,14 @@
+---
+- name: Run Show Routing Command on Primary FW
+  paloaltonetworks.panos.panos_op:
+    provider: "{{ primary }}"
+    cmd: |
+      <show><routing><route></route></routing></show>
+    cmd_is_xml: true
+  register: routing_table_output
+
+- name: Convert XML Output to JSON
+  ansible.builtin.set_fact:
+    routing_table_json: '{{routing_table_output.stdout_xml|ansible.utils.from_xml("xmltodict")}}'
+  delegate_to: localhost
+

@@ -1,0 +1,69 @@
+---
+# panos_facts.yml - Gather data about a PAN-OS device.
+#
+# Description
+# ===========
+#
+# Uses the 'panos_facts' module to gather data about a PAN-OS device.
+#
+# This playbook requires connection details for the device to be specified in the variables 'ip_address', 'username',
+# and 'password'.  These may be defined as host variables (see `host_vars/firewall.yml` for an example) or
+# extra vars.
+#
+# Modules Used
+# ============
+#
+# panos_facts - https://paloaltonetworks.github.io/pan-os-ansible/modules/panos_facts.html
+#
+# Usage
+# =====
+#
+#   $ ansible-playbook -i inventory tasks/panos_roles_in_ha.yml
+- name: Gather Facts From FW1
+  paloaltonetworks.panos.panos_facts:
+    provider: '{{ primary }}'
+
+- name: Saving FW1 Uptime
+  ansible.builtin.set_fact:
+    fw1_uptime: "{{ ansible_facts['net_uptime'] | replace(', ','_') }}"
+
+- name: Saving HA State info from FW1
+  ansible.builtin.set_fact:
+    primary_ha: "{{ansible_facts['net_ha_localstate']}}"
+
+- name: Saving Installed OS version for FW1
+  ansible.builtin.set_fact:
+    fw1_os_version: "{{ ansible_facts['net_version'] }}"
+
+- name: Gather Facts For FW2
+  paloaltonetworks.panos.panos_facts:
+    provider: '{{ secondary }}'
+
+- name: Saving FW2 Uptime
+  ansible.builtin.set_fact:
+    fw2_uptime: "{{ ansible_facts['net_uptime'] | replace(', ','_')  }}"
+
+- name: Saving HA State info from FW2
+  ansible.builtin.set_fact:
+    secondary_ha: "{{ansible_facts['net_ha_localstate']}}"
+
+- name: Saving Installed OS version for FW2
+  ansible.builtin.set_fact:
+    fw2_os_version: "{{ ansible_facts['net_version'] }}"
+
+- name: Are Store PANs in HA state?
+  ansible.builtin.set_fact:
+    valid_ha: "{{True if (primary_ha == 'active' or primary_ha == 'passive') and (secondary_ha == 'active' or secondary_ha == 'passive') else False}}"
+
+- name: Verifying Which Firewall is active in HA
+  ansible.builtin.set_fact:
+    primary_ip_address: "{{secondary.ip_address}}"
+    secondary_ip_address: "{{primary.ip_address}}"
+  when: primary_ha == 'passive'
+
+- name: HA Status for Stores
+  ansible.builtin.debug:
+    msg:
+      - "FW1 HA Status => {{primary.ip_address}} == {{primary_ha}}"
+      - "FW2 HA Status => {{secondary.ip_address}} == {{secondary_ha}}"
+

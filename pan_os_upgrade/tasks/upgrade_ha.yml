@@ -1,0 +1,129 @@
+---
+- name: Backup device config (primary)
+  paloaltonetworks.panos.panos_op:
+    provider: '{{ primary }}'
+    cmd: 'save config to {{ backup_filename }}'
+  when: backup_config|bool
+
+- name: Backup device config (secondary)
+  paloaltonetworks.panos.panos_op:
+    provider: '{{ secondary }}'
+    cmd: 'save config to {{ backup_filename }}'
+  when: backup_config|bool
+
+- name: Download target PAN-OS version
+  paloaltonetworks.panos.panos_software:
+    provider: '{{ primary }}'
+    version: '{{ version }}'
+    download: true
+    sync_to_peer: true
+    install: false
+
+- name: Suspend primary device
+  paloaltonetworks.panos.panos_op:
+    provider: '{{ primary }}'
+    cmd: 'request high-availability state suspend'
+
+- name: Check that secondary is now active
+  paloaltonetworks.panos.panos_op:
+    provider: '{{ secondary }}'
+    cmd: 'show high-availability state'
+  register: secondary_active
+  retries: 16
+  delay: 30
+  until: ( secondary_active.stdout | from_json).response.result.group["local-info"].state == 'active' and
+         ( secondary_active.stdout | from_json).response.result.group["peer-info"].state == 'suspended' and
+         ( secondary_active.stdout | from_json).response.result.group["peer-info"]["state-reason"] == 'User requested' # yamllint disable-line
+
+- name: "Install target PAN-OS {{version}} and restart (primary)"
+  paloaltonetworks.panos.panos_software:
+    provider: '{{ primary }}'
+    version: '{{ version }}'
+    install: true
+    restart: true
+
+- name: Pause for restart
+  ansible.builtin.pause:
+    seconds: 30
+
+- name: Chassis ready (primary)
+  paloaltonetworks.panos.panos_op:
+    provider: '{{ primary }}'
+    cmd: 'show chassis-ready'
+  changed_when: false
+  register: result
+  until: result is not failed and (result.stdout | from_json).response.result == 'yes'
+  retries: 30
+  delay: 60
+
+- name: State sync check (primary)
+  paloaltonetworks.panos.panos_op:
+    provider: '{{ primary }}'
+    cmd: 'show high-availability state'
+  register: primary_state_sync
+  retries: 10
+  delay: 30
+  until: '"state" in ( primary_state_sync.stdout | from_json).response.result.group["local-info"] and
+         ( primary_state_sync.stdout | from_json).response.result.group["local-info"].state == "passive" and
+         ( primary_state_sync.stdout | from_json).response.result.group["local-info"]["state-sync"] == "Complete"'
+
+- name: Pause for verification
+  ansible.builtin.pause:
+    prompt: 'Primary upgrade complete.  Pausing for verification.'
+  when: pause_mid_upgrade
+
+- name: Suspend secondary device
+  paloaltonetworks.panos.panos_op:
+    provider: '{{ secondary }}'
+    cmd: 'request high-availability state suspend'
+
+- name: Check that primary is now active
+  paloaltonetworks.panos.panos_op:
+    provider: '{{ primary }}'
+    cmd: 'show high-availability state'
+  register: primary_active
+  retries: 10
+  delay: 30
+  until: ( primary_active.stdout | from_json).response.result.group["local-info"].state == 'active' and
+         ( primary_active.stdout | from_json).response.result.group["peer-info"].state == 'suspended' and
+         ( primary_active.stdout | from_json).response.result.group["peer-info"]["state-reason"] == 'User requested'
+
+- name: "Install target PAN-OS {{version}} and restart (secondary)"
+  paloaltonetworks.panos.panos_software:
+    provider: '{{ secondary }}'
+    version: '{{ version }}'
+    install: true
+    restart: true
+
+- name: Pause for restart
+  ansible.builtin.pause:
+    seconds: 30
+
+- name: Chassis ready (secondary)
+  paloaltonetworks.panos.panos_op:
+    provider: '{{ secondary }}'
+    cmd: 'show chassis-ready'
+  changed_when: false
+  register: result
+  until: result is not failed and (result.stdout | from_json).response.result == 'yes'
+  retries: 30
+  delay: 60
+
+- name: State sync check (secondary)
+  paloaltonetworks.panos.panos_op:
+    provider: '{{ secondary }}'
+    cmd: 'show high-availability state'
+  register: secondary_state_sync
+  retries: 10
+  delay: 30
+  until: '"state" in ( secondary_state_sync.stdout | from_json).response.result.group["local-info"] and
+         ( secondary_state_sync.stdout | from_json).response.result.group["local-info"].state == "passive" and
+         ( secondary_state_sync.stdout | from_json).response.result.group["local-info"]["state-sync"] == "Complete"'
+
+- name: Verify Firewall Upgrade Was Successful
+  ansible.builtin.set_fact:
+    upgrade_ha_status: "SUCCESS"
+  when: '"state" in ( secondary_state_sync.stdout | from_json).response.result.group["local-info"] and
+         ( secondary_state_sync.stdout | from_json).response.result.group["local-info"].state == "passive" and
+         ( secondary_state_sync.stdout | from_json).response.result.group["local-info"]["state-sync"] == "Complete"'
+

@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- The above 3 meta tags *must* come first in the head; any other head content must come *after* these tags -->
+
+    <title>PAN-OS Log Query</title>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <!-- Bootstrap core CSS -->
+    <link href="{{ url_for('static', filename='bootstrap.min.css') }}" rel="stylesheet">
+
+    <link href="{{ url_for('static', filename='theme.css') }}" rel="stylesheet">
+  </head>
+
+  <body>
+  <header>
+    <h1>Panorama Log Collector Query!</h1>
+    <nav>
+      <a href="{{ url_for('main.index') }}">Home</a>
+      <a href="{{ url_for('log.index') }}">Query Firewall Logs</a>
+      <a href="{{ url_for('suggestions.index') }}">Report Problems</a>
+      <a href="{{ url_for('about.index') }}">About</a>
+    </nav>
+  </header>
+  {% block content %}
+
+  {% endblock %}
+  </body>
+</html>

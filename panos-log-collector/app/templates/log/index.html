@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% from "log/_render_field.html" import render_field %}
+
+{% block content %}
+    <div class="container theme-showcase" role="main">
+
+        <h3>Disclaimer:</h3>
+        <p>This tool will query the Panorama Log Collector.<br>
+        You have to have tested network connectivity at least 30min before runnning a log request.</p>
+        <p>Also, make sure to remove white spaces before and after the IP address.</p>
+
+        <div class="row">
+          <div class="col-lg-12">
+            <div class="well bs-component">
+              <form id="networkForm" class="form-horizontal", method="POST">
+                  {{ form.csrf_token }}
+                <fieldset>
+                  <legend>PAN-OS Log Query</legend>
+                  {{ render_field(form.source_ip, placeholder=form.source_ip.label.text) }}
+                  {{ render_field(form.dest_ip, placeholder=form.dest_ip.label.text) }}
+                  {{ render_field(form.dest_port, placeholder='Optional Field') }}
+                    <input type="radio" name="output_type" value="simple", checked="checked">
+                    <label for="simple">Simple Output</label><br>
+                    <input type="radio" name="output_type" value="detailed">
+                    <label for="detailed">Detailed Output</label><br><br>
+                  <div class="form-group">
+                    <div class="col-lg-10 col-lg-offset-2">
+                      <button type="reset" class="btn btn-default">Cancel</button>
+                      <button type="submit" class="btn btn-primary">Submit</button>
+                    </div>
+                  </div>
+                </fieldset>
+              </form>
+            </div>
+          </div>
+        </div>
+    </div> <!-- /container -->
+{% endblock %}

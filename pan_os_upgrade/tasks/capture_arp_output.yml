@@ -1,0 +1,19 @@
+---
+- name: Run Show ARP All command
+  paloaltonetworks.panos.panos_op:
+    provider: "{{ primary }}"
+    cmd: |
+      <show><arp><entry name = 'all'/></arp></show>
+    cmd_is_xml: true
+  register: arp_table_output
+
+- name: Convert XML Output to JSON
+  ansible.builtin.set_fact:
+    arp_table_json: '{{arp_table_output.stdout_xml|ansible.utils.from_xml("xmltodict")}}'
+  delegate_to: localhost
+
+- name: Print ARP Table JSON
+  ansible.builtin.set_fact:
+    arp_output_json: "{{arp_table_json['response']['result']['entries']['entry'] | default('NA')}}"
+  delegate_to: localhost
+  ignore_errors: true

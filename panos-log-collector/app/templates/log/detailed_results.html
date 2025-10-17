@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <div class="container theme-showcase" role="main">
+      <h2>Log Output - Detailed</h2>
+      <h2>Your Results For:</h2>
+      <p>Source IP: {{ source_ip }}</p>
+      {% if dest_ip %}
+        <p>Destination IP: {{ dest_ip }}</p>
+      {% endif %}
+      {% if dest_port %}
+        <p>Destination Port: {{ dest_port }}</p>
+      {% endif %}
+      <hr>
+      <h2>Log Output:</h2>
+      <br>
+      {% if log_results %}
+          <p>Firewalls found in network path: {{ log_results['firewalls']|length }}</p>
+            {% for device in log_results['firewalls'] %}
+            <p>Firewall: <span style="color:#800000;text-transform:uppercase">{{ device }}</span></p>
+            <p>Ports Tested on this Firewall:</p>
+                <ul>
+                    {% for port in log_results['firewalls'][device]['ports'] %}
+                    <li>{{ port }}</li>
+                    {% endfor %}
+                </ul>
+            {% endfor %}
+
+          <p>======================================================================</p>
+          {% for device in log_results['firewalls'] %}
+            <h3>Firewall Tested: {{ device }}</h3>
+            <p>Log:</p>
+            {% for dest_ip in log_results['firewalls'][device]['ip_addr'] %}
+            <p>Destination IP: {{ dest_ip }}</p>
+                {% for entry in log_results['firewalls'][device]['ip_addr'][dest_ip] %}
+                    <p>
+                    {% if 'allow' == entry['action'] %}
+                    <span style="color:green;text-transform:uppercase">Action: {{ entry['action'] }}</span><br>
+                    {% endif %}
+                    {% if 'deny' == entry['action'] %}
+                    <span style="color:red;text-transform:uppercase">Action: {{entry['action'] }}</span><br>
+                    {% endif %}
+                    Dest. Port: {{ entry['dport'] }}<br>
+                    Protocol: {{ entry['proto'] }}<br>
+                    From Zone: {{ entry['from_zone'] }}<br>
+                    To Zone: {{ entry['to_zone'] }}<br>
+                    Rule:: {{ entry['rule'] }}<br>
+                    Time Generated: {{ entry['time_generated'] }}</p>
+                {% endfor %}
+            {% endfor %}
+          <p>======================================================================</p>
+          {% endfor %}
+
+      {% else %}
+          <p>No log entry was found.<br>
+          This means that you either haven't tested connectivity,<br>
+          OR traffic is not traversing a PaloAlto Firewall.</p>
+      {% endif %}
+
+    </div> <!-- /container -->
+
+{% endblock %}

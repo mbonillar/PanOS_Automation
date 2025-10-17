@@ -1,0 +1,28 @@
+- name: Generate Report File Name
+  ansible.builtin.set_fact:
+    csv_filename: '{{report_file_name}}'
+  delegate_to: localhost
+  run_once: true
+
+- name: Delete file to Clear Content
+  ignore_errors: yes
+  file:
+    state: absent
+    path: "{{ csv_path }}/{{ csv_filename }}"
+  run_once: true
+
+- name: Create file if it was Deleted
+  ignore_errors: yes
+  file:
+    path: "{{ csv_path }}/{{ csv_filename }}"
+    state: touch
+  run_once: true
+
+- name: Save CSV Headers
+  ansible.builtin.lineinfile:
+    dest: "{{ csv_path }}/{{ csv_filename }}"
+    line: "{{ headers }}"
+    create: true
+    state: present
+  delegate_to: localhost
+  run_once: true

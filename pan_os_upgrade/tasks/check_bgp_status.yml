@@ -1,0 +1,18 @@
+- name: Show BGP Status
+  paloaltonetworks.panos.panos_op:
+    provider: '{{ primary }}'
+    cmd: "show routing protocol bgp peer"
+    cmd_is_xml: false
+  register: bgp_output
+
+- name: Convert BGP Status from XML to JSON
+  ansible.builtin.set_fact:
+    bgp_peer_json: '{{ bgp_output.stdout_xml|ansible.utils.from_xml("xmltodict")}}'
+
+- name: Save BGP Peer Status
+  ansible.builtin.set_fact:
+    peer_status: '{{bgp_peer_json["response"]["result"]["entry"]["status"] | trim}}'
+
+- name: Print BGP Peer Status
+  ansible.builtin.debug:
+    msg: "BGP Status for Active FW {{primary_ip_address}} is {{ peer_status }}"

@@ -1,0 +1,1 @@
+Store_Number,FW1_Pre_OS,FW2_Pre_OS,FW1_Pos_OS,FW2_Pos_OS,Target_OS,Upgrade_Status,HA_Active_IP,HA_Active_Status,HA_Passive_IP,HA_Passive_Status,BGP_State,Sessions_Pre_SSL,Sessions_Pre_DNS,Sessions_Pre_LDAP,Sessions_Post_SSL,Sessions_Post_DNS,Sessions_Post_LDAP

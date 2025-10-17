@@ -1,0 +1,246 @@
+- name: Clean Up Report File
+  hosts: localhost
+  connection: local
+  serial: 40
+
+  vars:
+    # path where reports will be stored
+    csv_path: reports
+    report_file_name: 'upgrade_report_{{ansible_date_time.date}}.csv'
+
+    # CSV Headers for Reporting
+    headers: >-
+      Store_Number,FW1_Pre_OS,FW2_Pre_OS,FW1_Pos_OS,FW2_Pos_OS,Target_OS,Upgrade_Status,HA_Active_IP,HA_Active_Status,HA_Passive_IP,HA_Passive_Status,BGP_State,Sessions_Pre_SSL,Sessions_Pre_DNS,Sessions_Pre_LDAP,Sessions_Post_SSL,Sessions_Post_DNS,Sessions_Post_LDAP
+
+  tasks:
+    - name: Generate Report File Name
+      ansible.builtin.set_fact:
+        csv_filename: 'upgrade_report_{{ansible_date_time.date}}.csv'
+      delegate_to: localhost
+
+    - ansible.builtin.include_tasks: tasks/upgrade_report_file.yml
+
+
+- name: PANOS Upgrade Process
+  hosts: all
+  connection: local
+  serial: 10
+
+  vars:
+    primary:
+      ip_address: '{{ primary_ip_address }}'
+      username: '{{ username | default(omit) }}'
+      password: '{{ password | default(omit) }}'
+      api_key: '{{ api_key | default(omit) }}'
+
+    secondary:
+      ip_address: '{{ secondary_ip_address }}'
+      username: '{{ username | default(omit) }}'
+      password: '{{ password | default(omit) }}'
+      api_key: '{{ api_key | default(omit) }}'
+
+    # CSV Headers for Reporting
+    headers: >-
+      Store_Number,FW1_Pre_OS,FW2_Pre_OS,FW1_Pos_OS,FW2_Pos_OS,Target_OS,Upgrade_Status,HA_Active_IP,HA_Active_Status,HA_Passive_IP,HA_Passive_Status,BGP_State,Sessions_Pre_SSL,Sessions_Pre_DNS,Sessions_Pre_LDAP,Sessions_Post_SSL,Sessions_Post_DNS,Sessions_Post_LDAP
+
+    # path where reports will be stored
+    csv_path: reports
+    report_file_name: 'upgrade_report_{{ansible_date_time.date}}.csv'
+
+    # backup_config - Create a backup of the currently running config before upgrading on both devices.
+    backup_config: true
+
+    # backup_filename - Filename for running config backup.
+    backup_filename: 'ansible-backup-{{ ansible_date_time.date }}.xml'
+
+    # pause_mid_upgrade - Optionally pause for additional verification during upgrade.  This playbook will perform
+    #                     basic checks for HA status and session sync, but this will wait for manual verification before
+    #                     upgrading the secondary firewall.
+    pause_mid_upgrade: false
+
+  tasks:
+    - name: Generate Report File Name
+      ansible.builtin.set_fact:
+        csv_filename: 'upgrade_report_{{ansible_date_time.date}}.csv'
+      delegate_to: localhost
+
+    - ansible.builtin.include_tasks: tasks/panos_roles_in_ha.yml
+
+    - name: Saving Previous Image OS version Info
+      ansible.builtin.set_fact:
+        fw1_pre_os_version: "{{ fw1_os_version }}"
+        fw2_pre_os_version: "{{ fw2_os_version }}"
+
+    - name: Setting default Value if OS version was not captured
+      ansible.builtin.set_fact:
+        fw1_pre_os_version: "Failed_to_retreive"
+      when: fw1_pre_os_version is undefined
+
+    - name: Setting default Value if OS version was not captured
+      ansible.builtin.set_fact:
+        fw2_pre_os_version: "Failed_to_retrieve"
+      when: fw2_pre_os_version is undefined
+
+    - ansible.builtin.include_tasks: tasks/check_bgp_status.yml
+
+    # upgrade will happen only if there's a valid HA and BGP is Established
+    - block:
+      - ansible.builtin.include_tasks: tasks/sessions_count.yml
+
+      - name: Save Pre Upgrade Sessions for Reporting
+        ansible.builtin.set_fact:
+          pre_upgrade_sessions: "{{ active_sessions }}"
+
+      - ansible.builtin.include_tasks: tasks/capture_arp_output.yml
+
+      - name: Convert Output to CSV
+        ansible.builtin.set_fact:
+          csv_arp_output: "{{ arp_table_json | arp_backups(inventory_hostname, 'pre') }}"
+        ignore_errors: yes
+
+      - name: Check File Was Created
+        ansible.builtin.debug:
+          var: csv_arp_output
+        ignore_errors: yes
+
+      - ansible.builtin.include_tasks: tasks/routing_table.yml
+
+      - name: Convert Pre Upgrade Routing Output to CSV
+        ansible.builtin.set_fact:
+          routing_file: "{{ routing_table_json | routing_backups(inventory_hostname, 'pre') }}"
+        ignore_errors: yes
+
+      - name: Check File Was Created
+        ansible.builtin.debug:
+          var: routing_file
+        ignore_errors: yes
+
+      - name: Content Upgrade for HA Pair
+        ansible.builtin.include_tasks: tasks/upgrade_content.yml
+        vars:
+          sync_to_peer: True
+        when:
+          - valid_ha == true
+          # - peer_status == 'Established'
+
+      - name: Upgrade HA Firewalls
+        ansible.builtin.include_tasks: tasks/upgrade_ha.yml
+        when:
+          - valid_ha == true
+          # - peer_status == 'Established'
+
+      - name: Set Upgrade Status to SKIPPED if FW already patched
+        ansible.builtin.set_fact:
+          upgrade_ha_status: "SKIPPED"
+        when:
+          - fw1_pre_os_version == version
+          - fw2_pre_os_version == version
+
+      - name: Set Firewall Upgrade to FAILED if not SUCCESS
+        ansible.builtin.set_fact:
+          upgrade_ha_status: "FAILED"
+        when: upgrade_ha_status is undefined
+
+      - ansible.builtin.include_tasks: tasks/panos_roles_in_ha.yml
+
+      - name: Saving Upgraded Image OS version Info
+        ansible.builtin.set_fact:
+          fw1_pos_os_version: "{{ fw1_os_version }}"
+          fw2_pos_os_version: "{{ fw2_os_version }}"
+
+      - name: Setting default Value if OS version was not captured
+        ansible.builtin.set_fact:
+          fw1_pos_os_version: "Failed_to_retreive"
+        when: fw1_pre_os_version is undefined
+
+      - name: Setting default Value if OS version was not captured
+        ansible.builtin.set_fact:
+          fw2_pos_os_version: "Failed_to_retrieve"
+        when: fw2_pre_os_version is undefined
+
+      - ansible.builtin.include_tasks: tasks/check_bgp_status.yml
+
+      - ansible.builtin.include_tasks: tasks/sessions_count.yml
+
+      - name: Save Pre Upgrade Sessions for Reporting
+        ansible.builtin.set_fact:
+          post_upgrade_sessions: "{{ active_sessions }}"
+
+      - name: Build Out CSV File
+        ansible.builtin.lineinfile:
+          path: "{{ csv_path }}/{{ csv_filename }}"
+          line: >-
+            {{inventory_hostname}},{{fw1_pre_os_version}},{{fw2_pre_os_version}},{{fw1_pos_os_version}},
+            {{fw2_pos_os_version}},{{version}},{{upgrade_ha_status}},
+            {{primary_ip_address}},{{primary_ha}},{{secondary_ip_address}},{{secondary_ha}},
+            {{peer_status}},{{pre_upgrade_sessions['ssl']}},{{pre_upgrade_sessions['dns_base']}},
+            {{pre_upgrade_sessions['ldap']}},{{post_upgrade_sessions['ssl']}},
+            {{post_upgrade_sessions['dns_base']}},{{post_upgrade_sessions['ldap']}}
+          state: present
+          create: true
+          insertafter: EOF
+        delegate_to: localhost
+        throttle: 1
+
+      - ansible.builtin.include_tasks: tasks/capture_arp_output.yml
+
+      - name: Convert Post Upgrade ARP Table to CSV
+        ansible.builtin.set_fact:
+          csv_arp_output: "{{ arp_table_json | arp_backups(inventory_hostname, 'post') }}"
+        ignore_errors: yes
+
+      - name: Check ARP Capture File Was Created
+        ansible.builtin.debug:
+          var: csv_arp_output
+        ignore_errors: yes
+
+      - ansible.builtin.include_tasks: tasks/routing_table.yml
+
+      - name: Convert Post Upgrade Routing Table to CSV
+        ansible.builtin.set_fact:
+          routing_file: "{{ routing_table_json | routing_backups(inventory_hostname, 'post') }}"
+        ignore_errors: yes
+
+      - name: Check Routing Table Capture File Was Created
+        ansible.builtin.debug:
+          var: routing_file
+        ignore_errors: yes
+
+
+- name: Send Email Report
+  hosts: localhost
+  vars:
+    csv_path: reports
+    headers: >-
+      Store_Number,FW1_Pre_OS,FW2_Pre_OS,FW1_Pos_OS,FW2_Pos_OS,Target_OS,Upgrade_Status,HA_Active_IP,HA_Active_Status,HA_Passive_IP,HA_Passive_Status,BGP_State,Sessions_Pre_SSL,Sessions_Pre_DNS,Sessions_Pre_LDAP,Sessions_Post_SSL,Sessions_Post_DNS,Sessions_Post_LDAP
+
+  tasks:
+    - name: Generate Report File Name
+      ansible.builtin.set_fact:
+        csv_filename: 'upgrade_report_{{ansible_date_time.date}}.csv'
+      delegate_to: localhost
+
+    - name: Read in CSV to Variable
+      community.general.read_csv:
+        path: "{{ csv_path }}/{{ csv_filename }}"
+      register: csv_file
+      delegate_to: localhost
+      run_once: true
+
+    - name: Verify CSV File for Errors
+      ansible.builtin.set_fact:
+        message: "{{ csv_filename | audit_csv }}"
+
+    - name: Send Email
+      community.general.mail:
+        host: "{{ email_host }}"
+        from: "{{ email_from }}"
+        port: 25
+        to: "{{ email_to }}"
+        subject: "[Ansible] PAN-OS Upgrade Report - {{ansible_date_time.date}}"
+        body: "{{ lookup('template', 'upgrade_report_template.html.j2') }}"
+        attach: "{{ csv_path }}/{{ csv_filename }}"
+        subtype: html
+        secure: never
+      delegate_to: localhost
+      run_once: true

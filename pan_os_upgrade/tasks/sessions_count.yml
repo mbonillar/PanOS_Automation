@@ -1,0 +1,26 @@
+---
+- name: Retrieve ACTIVE Sessions Count From Active FW
+  paloaltonetworks.panos.panos_op:
+    provider: "{{ primary }}"
+    cmd: "show session all filter state active"
+  register: ssl_sessions_output
+
+- name: Convert XML Output to JSON
+  ansible.builtin.set_fact:
+    active_sessions_json: '{{ssl_sessions_output.stdout_xml|ansible.utils.from_xml("xmltodict")}}'
+
+- name: Count Active Sessions
+  ansible.builtin.set_fact:
+    active_sessions: "{{ active_sessions_json | active_sessions }}"
+  delegate_to: localhost
+  ignore_errors: yes
+
+- name: Set Active Sessions to 0 If Failed Filter
+  ansible.builtin.set_fact:
+    active_sessions: "{'ssl': 0, 'dns_base': 0, 'ldap': 0}"
+  when: active_sessions is undefined
+
+- name: Print Sessions Count
+  ansible.builtin.debug:
+    var: active_sessions
+  ignore_errors: yes

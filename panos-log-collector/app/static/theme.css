@@ -1,0 +1,129 @@
+
+@import "compass/css3";
+
+@import "compass/css3";
+@import "compass/reset";
+*{
+  @include box-sizing(border-box);
+}
+
+/*body {*/
+/*  padding-top: 70px;*/
+/*  padding-bottom: 30px;*/
+/*}*/
+
+.theme-dropdown .dropdown-menu {
+  position: static;
+  display: block;
+  margin-bottom: 20px;
+}
+
+.theme-showcase > p > .btn {
+  margin: 5px 0;
+}
+
+.theme-showcase .navbar .container {
+  width: auto;
+}
+
+
+body{
+  background-color: #a8a8a8;
+  font-family: helvetica, arial, sans-serif;
+  font-size: 16px;
+  padding-top: 330px;
+  @include transition(padding-top .5s ease);
+}
+header{
+  width: 100%;
+  height: 300px;
+  background-color: #7e7e7e;
+  text-align: center;
+  position: relative;
+  position: fixed;
+  top: 0;
+  overflow: hidden;
+  @include transition(all .5s ease);
+
+  h1{
+    font-size: 42px;
+    color: #f3f2f2;
+    line-height: 230px;
+    text-transform: uppercase;
+    font-weight: 100;
+    @include transition(all .3s ease);
+  }
+
+  nav{
+    position: absolute;
+    bottom: 0;
+    height: 60px;
+    line-height: 60px;
+    width: 100%;
+    background-color: rgb(28, 28, 28);
+    a{
+      color: #c1c1c1;
+      display: inline-block;
+      padding: 10px 15px;
+      line-height: 1;
+      text-decoration: none;
+       @include border-radius(2px);
+        &:hover{
+          @include box-shadow(0 0 0 1px #fff);
+        }
+    }
+  }
+}
+h2{
+  font-size: 34px;
+  text-transform: uppercase;
+  font-weight: 100;
+  line-height: 2;
+  color: #2c3e50;
+}
+
+h3{
+  font-size: 24px;
+  text-transform: capitalize;
+  font-family: sans-serif;
+  font-weight: 100;
+  line-height: 2;
+  color: #2c3e50;
+}
+
+p{
+  margin-bottom: 2rem;
+  line-height: 1.5;
+  color: #3a3a3a;
+}
+textarea {
+   width: 100%;
+   height: 150px;
+   line-height: 1.5;
+   font-size: 14px;
+}
+
+.wrapper{
+  width: 800px;
+  margin: 0 auto;
+}
+section{
+  padding: 20px;
+  margin-bottom: 40px;
+  background-color: #fff;
+  @include border-radius(4px);
+  @include box-shadow(0 1px 0 rgba(0,0,0,.2));
+}
+
+/* Sticky Header Style */
+/* ---------------------------------------- */
+body.sticky-header{
+  padding-top: 100px;
+  header{
+    height: 60px;
+    background-color: rgba(52,152,219,.9);
+    h1{
+      @include scale(0);
+    }
+  }
+}
